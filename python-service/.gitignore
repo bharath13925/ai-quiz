@@ -1,0 +1,8 @@
+.pkl
+*.pkl
+hackenv/
+__pycache__/
+*.pyc
+*.pyo   
+*.pyd
+*.pkl
