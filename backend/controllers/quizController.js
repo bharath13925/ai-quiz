@@ -126,16 +126,13 @@ const startQuiz = async (req, res, next) => {
     }).sort({ createdAt: -1 })
 
     if (existing) {
-      // Load ALL questions served so far (up to end of current window)
-      const resumeIdx = existing.questions.length  // exact question the user was on
+      const resumeIdx = existing.questions.length
 
-      // Determine which window the user is in
       const windowIdx    = Math.floor(resumeIdx / WINDOW_SIZE)
       const currentWindow = existing.windows[windowIdx] || existing.windows[existing.windows.length - 1]
       const windowStart  = windowIdx * WINDOW_SIZE
       const windowEnd    = Math.min(windowStart + WINDOW_SIZE - 1, existing.questionIds.length - 1)
 
-      // Get all question IDs that have been served (all windows loaded so far)
       const servedIds = existing.questionIds
 
       const questions = await Question.find({ _id: { $in: servedIds } }).lean()
@@ -153,7 +150,7 @@ const startQuiz = async (req, res, next) => {
         attemptId:          existing._id,
         topic:              existing.topic,
         difficulty:         currentWindow?.difficulty || existing.difficulty,
-        currentQuestionIdx: resumeIdx,  // exact question index to resume from
+        currentQuestionIdx: resumeIdx,
         questions:          orderedQ,
         windows:            existing.windows,
         violationCount:     existing.violationCount || 0,
@@ -209,7 +206,7 @@ const startQuiz = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
-// ─── POST /api/quiz/violation — record a violation, return whether quiz should be force-submitted ──
+// ─── POST /api/quiz/violation ─────────────────────────────────────────────────
 const recordViolation = async (req, res, next) => {
   try {
     const { attemptId } = req.body
@@ -224,8 +221,6 @@ const recordViolation = async (req, res, next) => {
     attempt.violationCount = (attempt.violationCount || 0) + 1
     await attempt.save()
 
-    // 1st violation: warn, allow resume
-    // 2nd+ violation: force submit
     if (attempt.violationCount >= 2) {
       return res.json({ action: 'force_submit', violationCount: attempt.violationCount })
     }
@@ -268,8 +263,7 @@ const submitWindow = async (req, res, next) => {
     attempt.currentQuestionIdx = attempt.questions.length
 
     const totalAnswered = attempt.questions.length
-    // Complete if last window submitted OR autoSubmit forced
-    const isLastWindow = totalAnswered >= TOTAL_QUESTIONS || autoSubmit
+    const isLastWindow  = totalAnswered >= TOTAL_QUESTIONS || autoSubmit
 
     if (isLastWindow) {
       const correct   = attempt.questions.filter((q) => q.isCorrect).length
@@ -279,11 +273,18 @@ const submitWindow = async (req, res, next) => {
       const accuracy  = total > 0 ? correct / total : 0
       const totalTime = attempt.questions.reduce((s, q) => s + (q.timeTaken || 0), 0)
       const avgTime   = total > 0 ? totalTime / total : 0
+
+      // ── Pro Score Formula ──────────────────────────────────────────────────
+      // score = ((correct × weight × 10) - (wrong × 5) - (timeout × 10))
+      //         × accuracy / (1 + avgTime / 10)
+      // Fast + Accurate → highest | Slow + Wrong → lowest
       const lastWindow = attempt.windows[attempt.windows.length - 1]
       const weight     = WEIGHT[lastWindow?.difficulty || 'medium'] || 1
-      const score      = avgTime > 0
-        ? parseFloat(((correct * weight) / avgTime * 100).toFixed(2))
-        : parseFloat((correct * weight * 10).toFixed(2))
+
+      const rawNumerator = (correct * weight * 10) - (incorrect * 5) - (timeout * 10)
+      const score = parseFloat(
+        Math.max(0, (rawNumerator * accuracy) / (1 + avgTime / 10)).toFixed(2)
+      )
 
       attempt.score          = score
       attempt.accuracy       = accuracy
@@ -296,7 +297,8 @@ const submitWindow = async (req, res, next) => {
       if (autoSubmit) attempt.autoSubmitted = true
       await attempt.save()
 
-      updateLeaderboard(userId, attempt.topic, score, accuracy, correct, incorrect, timeout).catch(() => {})
+      // Pass avgTime as 5th argument (new parameter order)
+      updateLeaderboard(userId, attempt.topic, score, accuracy, avgTime, correct, incorrect, timeout).catch(() => {})
 
       const allQIds  = attempt.questions.map((a) => a.questionId?.toString())
       const allQDocs = await Question.find({ _id: { $in: allQIds } }).lean()
@@ -317,9 +319,12 @@ const submitWindow = async (req, res, next) => {
         // Score breakdown for UI
         scoreBreakdown: {
           correct,
+          incorrect,
+          timeout,
           weight,
-          avgTime: parseFloat(avgTime.toFixed(2)),
-          formula: `(${correct} × ${weight}) ÷ ${parseFloat(avgTime.toFixed(2))} × 100`,
+          avgTime:  parseFloat(avgTime.toFixed(2)),
+          accuracy: parseFloat((accuracy * 100).toFixed(1)),
+          formula:  `((${correct}×${weight}×10) - (${incorrect}×5) - (${timeout}×10)) × ${parseFloat((accuracy * 100).toFixed(1))}% ÷ (1 + ${parseFloat(avgTime.toFixed(2))}/10)`,
         },
         review: attempt.questions.map((a) => {
           const doc = allQMap[a.questionId?.toString()]

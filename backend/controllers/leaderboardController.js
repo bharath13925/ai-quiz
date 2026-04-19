@@ -18,8 +18,9 @@ const getLeaderboard = async (req, res, next) => {
     // All users who attempted (not just top 50)
     const allAttemptingUsers = await Attempt.distinct('userId', { topic: topicKey, isComplete: true })
 
+    // Hybrid sort: higher totalScore first, then lower avgTime for tie-breaking
     const entries = await Leaderboard.find({ topic: topicKey })
-      .sort({ totalScore: -1 })
+      .sort({ totalScore: -1, avgTime: 1 })
       .limit(100)
       .populate('userId', 'name email firebaseUid')
       .lean()
@@ -33,6 +34,7 @@ const getLeaderboard = async (req, res, next) => {
       bestScore:      Math.round(entry.bestScore     * 100) / 100,
       quizzesTaken:   entry.quizzesTaken,
       avgAccuracy:    Math.round(entry.avgAccuracy   * 100),
+      avgTime:        Math.round(entry.avgTime       * 100) / 100,
       totalCorrect:   entry.totalCorrect   || 0,
       totalIncorrect: entry.totalIncorrect || 0,
       totalTimeout:   entry.totalTimeout   || 0,
@@ -48,7 +50,7 @@ const getLeaderboard = async (req, res, next) => {
 }
 
 // ─── Internal: called after every completed quiz ──────────────────────────────
-const updateLeaderboard = async (userId, topic, score, accuracy, correctCount = 0, incorrectCount = 0, timeoutCount = 0) => {
+const updateLeaderboard = async (userId, topic, score, accuracy, avgTime, correctCount = 0, incorrectCount = 0, timeoutCount = 0) => {
   try {
     const existing = await Leaderboard.findOne({ userId, topic })
     if (!existing) {
@@ -59,13 +61,17 @@ const updateLeaderboard = async (userId, topic, score, accuracy, correctCount = 
         quizzesTaken:   1,
         bestScore:      score,
         avgAccuracy:    accuracy,
+        avgTime:        avgTime,
         totalCorrect:   correctCount,
         totalIncorrect: incorrectCount,
         totalTimeout:   timeoutCount,
       })
     } else {
-      const newAvg = ((existing.avgAccuracy * existing.quizzesTaken) + accuracy) /
-                     (existing.quizzesTaken + 1)
+      const newAvgAccuracy = ((existing.avgAccuracy * existing.quizzesTaken) + accuracy) /
+                             (existing.quizzesTaken + 1)
+      const newAvgTime     = ((existing.avgTime     * existing.quizzesTaken) + avgTime)   /
+                             (existing.quizzesTaken + 1)
+
       await Leaderboard.findOneAndUpdate(
         { userId, topic },
         {
@@ -77,7 +83,10 @@ const updateLeaderboard = async (userId, topic, score, accuracy, correctCount = 
             totalTimeout:   timeoutCount,
           },
           $max: { bestScore: score },
-          $set: { avgAccuracy: newAvg },
+          $set: {
+            avgAccuracy: newAvgAccuracy,
+            avgTime:     newAvgTime,
+          },
         }
       )
     }
@@ -95,7 +104,7 @@ const getAllLeaderboards = async (req, res, next) => {
     await Promise.all(
       topics.map(async (topic) => {
         const entries = await Leaderboard.find({ topic })
-          .sort({ totalScore: -1 })
+          .sort({ totalScore: -1, avgTime: 1 })
           .limit(3)
           .populate('userId', 'name')
           .lean()

@@ -9,6 +9,7 @@ const leaderboardSchema = new mongoose.Schema(
     quizzesTaken:   { type: Number, default: 0 },
     bestScore:      { type: Number, default: 0 },
     avgAccuracy:    { type: Number, default: 0 }, // 0–1
+    avgTime:        { type: Number, default: 0 }, // average response time in seconds
     totalCorrect:   { type: Number, default: 0 },
     totalIncorrect: { type: Number, default: 0 },
     totalTimeout:   { type: Number, default: 0 },

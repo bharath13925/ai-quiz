@@ -41,7 +41,7 @@ const PlayerCardMobile = ({ entry, tm }) => {
           </span>
           <div className="text-left">
             <p className="text-white font-bold text-sm">{entry.name}</p>
-            <p className="text-slate-600 text-xs">{entry.quizzesTaken} quiz · {entry.avgAccuracy}% acc</p>
+            <p className="text-slate-600 text-xs">{entry.quizzesTaken} quiz · {entry.avgAccuracy}% acc · ⏱ {entry.avgTime?.toFixed(1) || 0}s</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -56,7 +56,7 @@ const PlayerCardMobile = ({ entry, tm }) => {
       </button>
 
       {expanded && (
-        <div className="mt-3 ml-11 grid grid-cols-3 gap-2">
+        <div className="mt-3 ml-11 grid grid-cols-2 gap-2">
           <div className="p-2 rounded-lg text-center" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
             <p className="text-emerald-400 font-black text-sm">{entry.totalCorrect}</p>
             <p className="text-slate-600 text-[10px]">Correct</p>
@@ -69,7 +69,11 @@ const PlayerCardMobile = ({ entry, tm }) => {
             <p className="text-orange-400 font-black text-sm">{entry.totalTimeout}</p>
             <p className="text-slate-600 text-[10px]">Timeout</p>
           </div>
-          <div className="col-span-3 p-2 rounded-lg text-center" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="p-2 rounded-lg text-center" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
+            <p className="text-blue-400 font-black text-sm">{entry.avgTime?.toFixed(1) || 0}s</p>
+            <p className="text-slate-600 text-[10px]">Avg Time</p>
+          </div>
+          <div className="col-span-2 p-2 rounded-lg text-center" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <p className="text-slate-400 text-xs">Best: <span className="text-white font-bold">{entry.bestScore.toFixed(1)}</span></p>
           </div>
         </div>
@@ -221,7 +225,7 @@ const LeaderboardPage = () => {
               <span className="text-2xl">{tm.icon}</span>
               <div>
                 <h2 className="font-black text-lg text-white" style={{ fontFamily: "'Syne',sans-serif" }}>{tm.label} Rankings</h2>
-                <p className="text-slate-600 text-xs">All players ranked by total score · showing correct/incorrect/timeout</p>
+                <p className="text-slate-600 text-xs">Ranked by score · ties broken by avg response time · showing full stats</p>
               </div>
             </div>
             <button onClick={() => navigate(`/quiz/${topic}`)}
@@ -257,7 +261,7 @@ const LeaderboardPage = () => {
             <>
               {/* Desktop column headers */}
               <div className="hidden lg:grid px-6 py-3 border-b text-[10px] uppercase tracking-[0.15em] font-bold text-slate-600"
-                style={{ borderColor: 'rgba(255,255,255,0.04)', gridTemplateColumns: '60px 1fr 90px 80px 70px 70px 65px 65px 50px' }}>
+                style={{ borderColor: 'rgba(255,255,255,0.04)', gridTemplateColumns: '60px 1fr 90px 80px 70px 70px 65px 65px 70px 50px' }}>
                 <div>Rank</div>
                 <div>Player</div>
                 <div className="text-right">Total Score</div>
@@ -266,6 +270,7 @@ const LeaderboardPage = () => {
                 <div className="text-right">✅ Correct</div>
                 <div className="text-right">❌ Wrong</div>
                 <div className="text-right">⏰ T/O</div>
+                <div className="text-right">⏱ Time</div>
                 <div className="text-right">Acc.</div>
               </div>
 
@@ -288,6 +293,10 @@ const LeaderboardPage = () => {
                     : 'rgba(255,255,255,0.04)'
                   const totalAnswered = (entry.totalCorrect || 0) + (entry.totalIncorrect || 0) + (entry.totalTimeout || 0)
 
+                  // Colour-code avg time: fast=green, medium=amber, slow=red
+                  const avgTimeSec = entry.avgTime || 0
+                  const timeColor  = avgTimeSec <= 8 ? '#34d399' : avgTimeSec <= 14 ? '#fbbf24' : '#f87171'
+
                   return (
                     <div key={entry.rank} className="lb-row px-6 py-3.5"
                       style={{
@@ -295,7 +304,7 @@ const LeaderboardPage = () => {
                         opacity: 0,
                         background: isPodium ? `linear-gradient(90deg,${rankBg},transparent)` : 'transparent',
                         borderLeft: isPodium ? `2px solid ${medalColor}50` : '2px solid transparent',
-                        gridTemplateColumns: '60px 1fr 90px 80px 70px 70px 65px 65px 50px',
+                        gridTemplateColumns: '60px 1fr 90px 80px 70px 70px 65px 65px 70px 50px',
                         display: 'grid',
                         alignItems: 'center',
                       }}>
@@ -353,6 +362,16 @@ const LeaderboardPage = () => {
                         <span className="text-orange-400 font-black text-sm">{entry.totalTimeout || 0}</span>
                       </div>
 
+                      {/* Avg Time — colour coded */}
+                      <div className="text-right">
+                        <span className="font-black text-sm" style={{ color: timeColor }}>
+                          {avgTimeSec.toFixed(1)}s
+                        </span>
+                        <p className="text-slate-700 text-[10px]">
+                          {avgTimeSec <= 8 ? 'fast' : avgTimeSec <= 14 ? 'ok' : 'slow'}
+                        </p>
+                      </div>
+
                       {/* Accuracy */}
                       <div className="text-right">
                         <span className="text-sm font-black" style={{
@@ -370,10 +389,10 @@ const LeaderboardPage = () => {
         {/* Score formula */}
         <div className="mt-6 p-5 rounded-2xl" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
           <h4 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
-            <span>📐</span> Score Formula
+            <span>📐</span> Score Formula (Pro Version)
           </h4>
           <p className="text-slate-500 text-xs leading-relaxed font-mono">
-            Score = (Correct × Difficulty Weight) ÷ Avg. Response Time × 100
+            Score = ((Correct × Weight × 10) − (Wrong × 5) − (Timeout × 10)) × Accuracy ÷ (1 + AvgTime / 10)
             <br />
             <span style={{ color: '#34d399' }}>Easy ×1</span>{' · '}
             <span style={{ color: '#fbbf24' }}>Medium ×1.5</span>{' · '}
@@ -381,8 +400,13 @@ const LeaderboardPage = () => {
             <span style={{ color: '#fb923c' }}>Timed-out = incorrect + 20s penalty</span>
           </p>
           <p className="text-slate-700 text-xs mt-2">
-            Correct / Wrong / T/O columns show cumulative totals across all quizzes for this topic.
+            Ranking: higher score first · equal scores broken by average response time (faster wins) · Correct / Wrong / T/O show cumulative totals.
           </p>
+          <div className="flex flex-wrap gap-4 mt-3 text-xs text-slate-600">
+            <span>⚡ <span style={{ color: '#34d399' }}>≤ 8s</span> = fast</span>
+            <span>🟡 <span style={{ color: '#fbbf24' }}>8–14s</span> = ok</span>
+            <span>🐢 <span style={{ color: '#f87171' }}>{'> 14s'}</span> = slow</span>
+          </div>
         </div>
       </main>
     </div>

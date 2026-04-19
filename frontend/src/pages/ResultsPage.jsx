@@ -21,11 +21,17 @@ const getGrade = (pct) => {
 
 // ─── Score Formula Card ───────────────────────────────────────────────────────
 const ScoreFormulaCard = ({ result, difficulty }) => {
-  const bd = result.scoreBreakdown
-  const weight = bd?.weight || DIFF_WEIGHTS[difficulty] || 1
-  const correct = result.correctCount || 0
-  const avgTime = bd?.avgTime || 0
-  const score   = result.score || 0
+  const bd       = result.scoreBreakdown
+  const weight   = bd?.weight    || DIFF_WEIGHTS[difficulty] || 1
+  const correct  = result.correctCount   || 0
+  const incorrect = result.incorrectCount || 0
+  const timeout  = result.timeoutCount   || 0
+  const avgTime  = bd?.avgTime   || 0
+  const accuracy = bd?.accuracy  ?? Math.round((result.accuracy || 0) * 100)
+  const score    = result.score  || 0
+
+  const rawNumerator = (correct * weight * 10) - (incorrect * 5) - (timeout * 10)
+  const formula = `((${correct}×${weight}×10) − (${incorrect}×5) − (${timeout}×10)) × ${accuracy}% ÷ (1 + ${avgTime}÷10)`
 
   return (
     <div className="p-6 rounded-2xl mb-6"
@@ -36,19 +42,20 @@ const ScoreFormulaCard = ({ result, difficulty }) => {
 
       {/* Formula display */}
       <div className="text-center mb-5 p-4 rounded-xl" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}>
-        <p className="text-slate-500 text-[10px] uppercase tracking-widest mb-2">Score Formula</p>
-        <p className="text-cyan-400 font-mono text-sm md:text-base font-bold">
-          (Correct × Difficulty Weight) ÷ Avg. Time × 100
+        <p className="text-slate-500 text-[10px] uppercase tracking-widest mb-2">Pro Score Formula</p>
+        <p className="text-cyan-400 font-mono text-xs md:text-sm font-bold leading-relaxed">
+          ((Correct × Weight × 10) − (Wrong × 5) − (Timeout × 10)) × Accuracy ÷ (1 + AvgTime / 10)
         </p>
       </div>
 
       {/* Formula breakdown */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
         {[
-          { label: 'Correct Answers', value: correct,              icon: '✅', color: '#10b981', desc: 'Questions answered right' },
-          { label: 'Difficulty Weight', value: `×${weight}`,       icon: '⚖️', color: '#f59e0b', desc: `Easy×1 / Medium×1.5 / Hard×2` },
-          { label: 'Avg. Time',        value: `${avgTime}s`,       icon: '⏱️', color: '#06b6d4', desc: 'Per question (max 20s)' },
-          { label: 'Final Score',      value: score.toFixed(1),    icon: '⭐', color: '#eab308', desc: 'Your score on leaderboard' },
+          { label: 'Correct',    value: correct,           icon: '✅', color: '#10b981', desc: 'Right answers'         },
+          { label: 'Weight',     value: `×${weight}`,      icon: '⚖️', color: '#f59e0b', desc: 'Difficulty multiplier' },
+          { label: 'Accuracy',   value: `${accuracy}%`,    icon: '🎯', color: '#06b6d4', desc: 'Accuracy factor'       },
+          { label: 'Avg Time',   value: `${avgTime}s`,     icon: '⏱️', color: '#a78bfa', desc: 'Per question (max 20s)'},
+          { label: 'Final Score',value: score.toFixed(1),  icon: '⭐', color: '#eab308', desc: 'Leaderboard score'     },
         ].map((item, i) => (
           <div key={i} className="p-3 rounded-xl text-center" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div className="text-lg mb-1">{item.icon}</div>
@@ -58,18 +65,34 @@ const ScoreFormulaCard = ({ result, difficulty }) => {
         ))}
       </div>
 
+      {/* Penalty display */}
+      {(incorrect > 0 || timeout > 0) && (
+        <div className="flex gap-3 mb-4">
+          {incorrect > 0 && (
+            <div className="flex-1 p-2 rounded-xl text-center" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)' }}>
+              <p className="text-red-400 text-xs font-bold">−{incorrect * 5} pts</p>
+              <p className="text-slate-600 text-[10px]">Wrong penalty ({incorrect}×5)</p>
+            </div>
+          )}
+          {timeout > 0 && (
+            <div className="flex-1 p-2 rounded-xl text-center" style={{ background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.15)' }}>
+              <p className="text-orange-400 text-xs font-bold">−{timeout * 10} pts</p>
+              <p className="text-slate-600 text-[10px]">Timeout penalty ({timeout}×10)</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Actual calculation */}
       <div className="p-3 rounded-xl text-center" style={{ background: 'rgba(0,0,0,0.2)' }}>
-        <p className="text-slate-500 text-xs">
-          <span className="text-slate-400">({correct} × {weight})</span>
-          <span className="text-slate-600 mx-2">÷</span>
-          <span className="text-slate-400">{avgTime}s</span>
-          <span className="text-slate-600 mx-2">×</span>
-          <span className="text-slate-400">100</span>
+        <p className="text-slate-500 text-xs font-mono leading-relaxed">
+          {formula}
           <span className="text-slate-600 mx-2">=</span>
           <span className="text-cyan-400 font-black">{score.toFixed(2)}</span>
         </p>
-        <p className="text-slate-700 text-[10px] mt-1">Timed-out questions count as incorrect with 20s penalty applied</p>
+        <p className="text-slate-700 text-[10px] mt-1">
+          Fast + accurate answers earn more · wrong/timeout answers reduce score · lower avg time boosts score
+        </p>
       </div>
 
       {/* Difficulty weight reference */}
@@ -119,7 +142,7 @@ const StatsSummaryRow = ({ result }) => {
   )
 }
 
-// ─── Question Review Card ──────────────────────────────────────────────────────
+// ─── Question Review Card ─────────────────────────────────────────────────────
 const ReviewCard = ({ item, index }) => {
   const [expanded, setExpanded] = useState(false)
 
@@ -140,7 +163,7 @@ const ReviewCard = ({ item, index }) => {
     <div className="rounded-2xl overflow-hidden transition-all duration-300"
       style={{ border: `1px solid ${borderColor}`, background: bgColor }}>
 
-      {/* Header row - always visible */}
+      {/* Header row */}
       <button
         className="w-full text-left p-5 flex items-start gap-3"
         onClick={() => setExpanded(v => !v)}
@@ -198,7 +221,7 @@ const ReviewCard = ({ item, index }) => {
             })}
           </div>
 
-          {/* Explanation — always shown (correct or incorrect) */}
+          {/* Explanation */}
           {item.explanation ? (
             <div className="ml-11 p-3 rounded-xl"
               style={{ background: 'rgba(6,182,212,0.06)', border: '1px solid rgba(6,182,212,0.15)' }}>
@@ -224,7 +247,7 @@ const ResultsPage = () => {
   const navigate          = useNavigate()
   const { state }         = useLocation()
   const [showReview,      setShowReview]      = useState(false)
-  const [reviewFilter,    setReviewFilter]    = useState('all') // 'all' | 'correct' | 'incorrect' | 'timeout'
+  const [reviewFilter,    setReviewFilter]    = useState('all')
   const [animated,        setAnimated]        = useState(false)
   const [hoveredAction,   setHoveredAction]   = useState(null)
 
@@ -349,7 +372,7 @@ const ResultsPage = () => {
             </div>
           </div>
 
-          {/* Stats grid — 4 main stats */}
+          {/* Stats grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: 'Score',    value: score.toFixed(1),    icon: '⭐', color: '#eab308' },
@@ -377,7 +400,7 @@ const ResultsPage = () => {
           <StatsSummaryRow result={result} />
         </div>
 
-        {/* Score Formula explanation */}
+        {/* Score Formula explanation (pro version) */}
         <div style={{ animation: 'fadeUpResult 0.6s ease forwards 450ms', opacity: 0 }}>
           <ScoreFormulaCard result={result} difficulty={difficulty} />
         </div>
@@ -429,10 +452,10 @@ const ResultsPage = () => {
                 {/* Filter tabs */}
                 <div className="flex gap-2 mb-4 flex-wrap">
                   {[
-                    { id: 'all',       label: `All (${review.length})`,               color: '#06b6d4' },
-                    { id: 'correct',   label: `Correct (${correctCount || 0})`,        color: '#10b981' },
-                    { id: 'incorrect', label: `Incorrect (${incorrectCount || 0})`,    color: '#ef4444' },
-                    { id: 'timeout',   label: `Timed Out (${timeoutCount || 0})`,      color: '#f97316' },
+                    { id: 'all',       label: `All (${review.length})`,                  color: '#06b6d4' },
+                    { id: 'correct',   label: `Correct (${correctCount || 0})`,          color: '#10b981' },
+                    { id: 'incorrect', label: `Incorrect (${incorrectCount || 0})`,      color: '#ef4444' },
+                    { id: 'timeout',   label: `Timed Out (${timeoutCount || 0})`,        color: '#f97316' },
                   ].map(tab => (
                     <button
                       key={tab.id}
