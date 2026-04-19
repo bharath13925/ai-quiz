@@ -237,6 +237,14 @@ def rule_based_predict(accuracy, avg_time, streak, prev_difficulty):
     return "medium"
 
 
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({
+        "message": "AI Service is running 🚀",
+        "status": "ok"
+    })
+
+
 # ─── /health ──────────────────────────────────────────────────────────────────
 @app.route("/health", methods=["GET"])
 def health():
