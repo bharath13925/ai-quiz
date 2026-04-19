@@ -1,6 +1,6 @@
 /**
  * api.js — Central API service layer
- * Supports windowed adaptive quiz, resume, and leaderboard with stats.
+ * Supports windowed adaptive quiz, resume, leaderboard with stats.
  */
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
@@ -48,8 +48,15 @@ export const quizAPI = {
    * Submit a window of 5 answers — returns next 5 questions or final result.
    * answers: [{ questionId, selectedOption, timeTaken, timedOut }]
    */
-  submitWindow: (attemptId, answers) =>
-    apiFetch('/quiz/window', { method: 'POST', body: JSON.stringify({ attemptId, answers }) }),
+  submitWindow: (attemptId, answers, autoSubmit = false) =>
+    apiFetch('/quiz/window', { method: 'POST', body: JSON.stringify({ attemptId, answers, autoSubmit }) }),
+
+  /**
+   * Record a fullscreen/tab violation.
+   * Returns { action: 'warn' | 'force_submit', violationCount }
+   */
+  recordViolation: (attemptId) =>
+    apiFetch('/quiz/violation', { method: 'POST', body: JSON.stringify({ attemptId }) }),
 
   getHistory: (params = {}) => {
     const qs = new URLSearchParams(params).toString()
@@ -65,7 +72,6 @@ export const leaderboardAPI = {
   getTopic: (topic) => apiFetch(`/leaderboard/${topic}`),
 }
 
-// ── CONTACT ─────────────────────────────────────────────────────────────────
 // ── CONTACT ───────────────────────────────────────────────────────────────────
 export const contactAPI = {
   submit: (name, email, message) =>

@@ -2,12 +2,16 @@ const mongoose = require('mongoose')
 
 const leaderboardSchema = new mongoose.Schema(
   {
-    userId:       { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    topic:        { type: String, required: true, enum: ['graphs', 'arrays', 'dbms', 'os'] },
-    totalScore:   { type: Number, default: 0 },
-    quizzesTaken: { type: Number, default: 0 },
-    bestScore:    { type: Number, default: 0 },
-    avgAccuracy:  { type: Number, default: 0 }, // 0–1
+    userId:         { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    // No enum — accept any topic that exists in the Question collection
+    topic:          { type: String, required: true, lowercase: true, trim: true },
+    totalScore:     { type: Number, default: 0 },
+    quizzesTaken:   { type: Number, default: 0 },
+    bestScore:      { type: Number, default: 0 },
+    avgAccuracy:    { type: Number, default: 0 }, // 0–1
+    totalCorrect:   { type: Number, default: 0 },
+    totalIncorrect: { type: Number, default: 0 },
+    totalTimeout:   { type: Number, default: 0 },
   },
   { timestamps: true }
 )

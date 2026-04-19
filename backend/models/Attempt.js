@@ -14,7 +14,8 @@ const questionResultSchema = new mongoose.Schema(
 const attemptSchema = new mongoose.Schema(
   {
     userId:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    topic:      { type: String, required: true, enum: ['graphs', 'arrays', 'dbms', 'os'] },
+    // No enum — accept any topic that exists in the Question collection
+    topic:      { type: String, required: true, lowercase: true, trim: true },
     difficulty: { type: String, required: true, enum: ['easy', 'medium', 'hard'] },
 
     // Answers accumulated across all windows
@@ -33,9 +34,16 @@ const attemptSchema = new mongoose.Schema(
       },
     ],
 
-    score:     { type: Number, default: 0 },
-    accuracy:  { type: Number, default: 0 }, // 0–1
-    totalTime: { type: Number, default: 0 }, // seconds
+    score:          { type: Number, default: 0 },
+    accuracy:       { type: Number, default: 0 }, // 0–1
+    totalTime:      { type: Number, default: 0 }, // seconds
+    correctCount:   { type: Number, default: 0 },
+    incorrectCount: { type: Number, default: 0 },
+    timeoutCount:   { type: Number, default: 0 },
+
+    // Violation tracking for fullscreen/tab enforcement
+    violationCount: { type: Number, default: 0 }, // how many times user violated
+    autoSubmitted:  { type: Boolean, default: false }, // true if quiz was force-submitted
 
     // Resume state
     currentQuestionIdx: { type: Number, default: 0 },

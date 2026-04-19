@@ -17,7 +17,7 @@ const submitContact = async (req, res, next) => {
       service: 'gmail',
       auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,   // Gmail App Password (not your real password)
+        pass: process.env.EMAIL_PASS,
       },
     })
 

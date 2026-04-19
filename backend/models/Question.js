@@ -5,7 +5,7 @@ const questionSchema = new mongoose.Schema(
     topic: {
       type:      String,
       required:  true,
-      enum:      ['arrays', 'graphs', 'dbms', 'os'],
+      enum:      ['arrays', 'graphs', 'dbms', 'os','stacks', 'queues', 'linked lists', 'trees', 'hashing', 'greedy algorithms', 'dynamic programming', 'backtracking', 'bit manipulation'],
       lowercase: true,
     },
     difficulty: {
