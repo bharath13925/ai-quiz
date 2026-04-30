@@ -12,10 +12,31 @@ const errorMiddleware   = require('./middleware/errorMiddleware')
 
 const app = express()
 
+// ✅ FIX 1: COOP/COEP for Firebase popup
+app.use((req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none')
+  next()
+})
+
+// ✅ FIX 2: Proper CORS for production
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://aiquizpro.xyz',
+  'https://www.aiquizpro.xyz'
+]
+
 app.use(cors({
-  origin:      process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
   credentials: true,
 }))
+
 app.use(express.json())
 
 app.use('/api/auth',        authRoutes)
@@ -44,4 +65,3 @@ mongoose
     console.error('❌ MongoDB connection failed:', err.message)
     process.exit(1)
   })
-

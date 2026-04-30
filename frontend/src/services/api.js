@@ -10,29 +10,60 @@ export const setToken   = (t) => localStorage.setItem('aiquiz_token', t)
 export const clearToken = () => localStorage.removeItem('aiquiz_token')
 
 const apiFetch = async (path, options = {}) => {
-  const token   = getToken()
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...options.headers,
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10000)
+
+  try {
+    const token = getToken()
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    }
+
+    const res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      throw new Error(data.message || `HTTP ${res.status}`)
+    }
+
+    return data
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Server timeout. Please try again.')
+    }
+    throw err
+  } finally {
+    clearTimeout(timeout)
   }
-  const res  = await fetch(`${BASE_URL}${path}`, { ...options, headers })
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`)
-  return data
 }
+
 
 // ── AUTH ─────────────────────────────────────────────────────────────────────
 export const authAPI = {
-  register:      (name, email, password) =>
-    apiFetch('/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) }),
-  login:         (email, password) =>
-    apiFetch('/auth/login',    { method: 'POST', body: JSON.stringify({ email, password }) }),
-  firebaseSync:  (firebaseIdToken) =>
+  register: (name, email, password) =>
+    apiFetch('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, password }),
+    }),
+
+  login: (email, password) =>
+    apiFetch('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+
+  firebaseSync: (firebaseIdToken) =>
     apiFetch('/auth/firebase-sync', {
-      method:  'POST',
+      method: 'POST',
       headers: { Authorization: `Bearer ${firebaseIdToken}` },
-      body:    JSON.stringify({}),
+      body: JSON.stringify({}),
     }),
 }
 

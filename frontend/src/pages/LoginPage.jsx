@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth'
 import { auth, googleProvider } from '../firebase'
-import { authAPI, setToken, clearToken } from '../services/api'
+import { authAPI, setToken } from '../services/api'
 
 const LoginPage = () => {
   const navigate = useNavigate()
@@ -18,57 +18,28 @@ const LoginPage = () => {
 
   const handleChange = (e) => { setForm({ ...form, [e.target.name]: e.target.value }); setError('') }
 
-  // ── Email/password login ─────────────────────────────────────────────────
-  // Strategy: authenticate with Firebase first → get ID token → firebaseSync
-  // This handles both email-registered users AND Google-created accounts
-  // consistently, without a separate bcrypt check that can break cross-auth users.
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
+    e.preventDefault(); setLoading(true)
     try {
-      // Step 1: Firebase sign-in (validates credentials)
-      const credential = await signInWithEmailAndPassword(auth, form.email, form.password)
-      // Step 2: Get Firebase ID token
-      const idToken = await credential.user.getIdToken()
-      // Step 3: Clear any stale JWT, then sync with backend to get a fresh one
-      clearToken()
-      const data = await authAPI.firebaseSync(idToken)
+      await signInWithEmailAndPassword(auth, form.email, form.password)
+      const data = await authAPI.login(form.email, form.password)
       setToken(data.token)
       navigate('/dashboard')
     } catch (err) {
-      // Provide friendly messages for common Firebase errors
-      const msg = err.message || ''
-      if (msg.includes('user-not-found') || msg.includes('wrong-password') || msg.includes('invalid-credential')) {
-        setError('Invalid email or password.')
-      } else if (msg.includes('too-many-requests')) {
-        setError('Too many failed attempts. Please try again later.')
-      } else if (msg.includes('user-disabled')) {
-        setError('This account has been disabled.')
-      } else {
-        setError(msg.replace('Firebase: ', '').replace(/\(auth\/.*\)\.?/, '').trim())
-      }
+      setError(err.message.replace('Firebase: ', '').replace(/\(auth\/.*\)\.?/, '').trim())
     } finally { setLoading(false) }
   }
 
-  // ── Google Sign-In ───────────────────────────────────────────────────────
   const handleGoogle = async () => {
-    setGoogleLoading(true)
-    setError('')
+    setGoogleLoading(true); setError('')
     try {
       const result  = await signInWithPopup(auth, googleProvider)
       const idToken = await result.user.getIdToken()
-      clearToken()
-      const data = await authAPI.firebaseSync(idToken)
+      const data    = await authAPI.firebaseSync(idToken)
       setToken(data.token)
       navigate('/dashboard')
     } catch (err) {
-      const msg = err.message || ''
-      if (msg.includes('popup-closed-by-user') || msg.includes('cancelled-popup-request')) {
-        // User dismissed the popup — not an error worth displaying
-      } else {
-        setError(msg.replace('Firebase: ', '').replace(/\(auth\/.*\)\.?/, '').trim())
-      }
+      setError(err.message.replace('Firebase: ', '').replace(/\(auth\/.*\)\.?/, '').trim())
     } finally { setGoogleLoading(false) }
   }
 
@@ -109,6 +80,7 @@ const LoginPage = () => {
         <div className="absolute bottom-1/3 left-1/4 w-64 h-64 rounded-full bg-blue-500/8 blur-[80px] animate-pulse" style={{ animationDelay: '1s' }} />
         <div className="absolute top-0 right-0 w-px h-full bg-gradient-to-b from-transparent via-cyan-500/20 to-transparent" />
 
+        {/* Floating brain icon */}
         <div className="absolute top-1/4 right-12 w-12 h-12 rounded-2xl flex items-center justify-center text-2xl opacity-30"
           style={{ animation: 'floatY 4s ease-in-out infinite', background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.2)' }}>
           🧠
@@ -119,6 +91,7 @@ const LoginPage = () => {
         </div>
 
         <div className="relative z-10 text-center px-12">
+          {/* Logo */}
           <div className="flex items-center gap-3 justify-center mb-12 cursor-pointer group" onClick={() => navigate('/')}>
             <div className="relative w-12 h-12">
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 opacity-60 blur-sm group-hover:opacity-90 transition-all duration-500" />
@@ -145,10 +118,10 @@ const LoginPage = () => {
 
           <div className="grid grid-cols-2 gap-3">
             {[
-              { icon: '🧠', label: 'XGBoost AI',   sub: 'Adaptive engine'    },
-              { icon: '⚡', label: '20 Questions',  sub: 'Per session'        },
+              { icon: '🧠', label: 'XGBoost AI',   sub: 'Adaptive engine' },
+              { icon: '⚡', label: '20 Questions',  sub: 'Per session' },
               { icon: '📊', label: 'Live Stats',    sub: 'Real-time tracking' },
-              { icon: '🏆', label: 'Leaderboard',   sub: 'Global rankings'    },
+              { icon: '🏆', label: 'Leaderboard',   sub: 'Global rankings' },
             ].map((item, i) => (
               <div key={i} className="feature-chip p-4 rounded-2xl text-left"
                 style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -187,16 +160,12 @@ const LoginPage = () => {
 
           {/* Google button */}
           <button
-            onClick={handleGoogle}
-            disabled={googleLoading || loading}
+            onClick={handleGoogle} disabled={googleLoading}
             className="w-full flex items-center justify-center gap-3 py-3.5 bg-white font-bold rounded-xl transition-all duration-300 disabled:opacity-60 hover:shadow-xl hover:shadow-white/15 hover:scale-[1.01] active:scale-[0.99] mb-6 text-slate-800 text-sm"
             style={{ border: '1px solid rgba(255,255,255,0.9)' }}
           >
             {googleLoading
-              ? <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
+              ? <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
               : <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                   <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -223,63 +192,41 @@ const LoginPage = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label style={{ display:'block',fontSize:'10px',fontWeight:700,color:'#64748b',textTransform:'uppercase',letterSpacing:'0.15em',marginBottom:'8px' }}>Email</label>
-              <input
-                type="email" name="email" value={form.email}
-                onChange={handleChange} required placeholder="you@example.com"
+              <input type="email" name="email" value={form.email} onChange={handleChange} required placeholder="you@example.com"
                 onFocus={() => setFocused('email')} onBlur={() => setFocused(null)}
-                style={inputStyle('email')}
-              />
+                style={inputStyle('email')} />
             </div>
             <div>
               <label style={{ display:'block',fontSize:'10px',fontWeight:700,color:'#64748b',textTransform:'uppercase',letterSpacing:'0.15em',marginBottom:'8px' }}>Password</label>
               <div style={{ position: 'relative' }}>
-                <input
-                  type={showPassword ? 'text' : 'password'} name="password" value={form.password}
+                <input type={showPassword ? 'text' : 'password'} name="password" value={form.password}
                   onChange={handleChange} required placeholder="Your password"
                   onFocus={() => setFocused('password')} onBlur={() => setFocused(null)}
-                  style={{ ...inputStyle('password'), paddingRight: '48px' }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
+                  style={{ ...inputStyle('password'), paddingRight: '48px' }} />
+                <button type="button" onClick={() => setShowPassword(!showPassword)}
                   style={{ position:'absolute',right:'14px',top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'#64748b',transition:'color 0.2s' }}
                   onMouseEnter={e => e.currentTarget.style.color = '#94a3b8'}
-                  onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
-                >
+                  onMouseLeave={e => e.currentTarget.style.color = '#64748b'}>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     {showPassword
-                      ? <>
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                        </>
-                      : <>
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </>
+                      ? <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></>
+                      : <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></>
                     }
                   </svg>
                 </button>
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={loading || googleLoading}
+            <button type="submit" disabled={loading}
               className="relative w-full py-3.5 rounded-xl font-bold text-white overflow-hidden disabled:opacity-60 transition-all duration-300 hover:scale-[1.01] hover:shadow-xl active:scale-[0.99]"
               style={{ background: 'linear-gradient(135deg,#06b6d4,#3b82f6)', boxShadow: '0 4px 20px rgba(6,182,212,0.2)' }}
               onMouseEnter={e => { if (!loading) e.currentTarget.style.boxShadow = '0 8px 32px rgba(6,182,212,0.4)' }}
               onMouseLeave={e => e.currentTarget.style.boxShadow = '0 4px 20px rgba(6,182,212,0.2)'}
             >
               <span className="relative flex items-center justify-center gap-2 text-sm">
-                {loading
-                  ? <>
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Logging in...
-                    </>
-                  : 'Log In →'
-                }
+                {loading ? (
+                  <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Logging in...</>
+                ) : 'Log In →'}
               </span>
             </button>
           </form>

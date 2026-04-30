@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { createUserWithEmailAndPassword, signInWithPopup, updateProfile } from 'firebase/auth'
 import { auth, googleProvider } from '../firebase'
-import { authAPI, setToken, clearToken } from '../services/api'
+import { authAPI, setToken } from '../services/api'
 
 const SignupPage = () => {
   const navigate = useNavigate()
@@ -18,78 +18,36 @@ const SignupPage = () => {
 
   const handleChange = (e) => { setForm({ ...form, [e.target.name]: e.target.value }); setError('') }
 
-  // ── Email/password signup ────────────────────────────────────────────────
-  // Strategy: create Firebase account → also register in MongoDB → firebaseSync
-  // for a fresh JWT → go straight to dashboard (no second login needed).
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (form.password !== form.confirm) return setError('Passwords do not match.')
     if (form.password.length < 6) return setError('Password must be at least 6 characters.')
     setLoading(true)
-    setError('')
     try {
-      // Step 1: Create Firebase account and set display name
       const userCred = await createUserWithEmailAndPassword(auth, form.email, form.password)
       await updateProfile(userCred.user, { displayName: form.name })
-
-      // Step 2: Register the user in MongoDB
-      await authAPI.register(form.name, form.email, form.password)
-
-      // Step 3: Get Firebase ID token and sync to get a JWT → go to dashboard
-      const idToken = await userCred.user.getIdToken()
-      clearToken()
-      const data = await authAPI.firebaseSync(idToken)
+      const data = await authAPI.register(form.name, form.email, form.password)
       setToken(data.token)
-      navigate('/dashboard')
+      navigate('/login')
     } catch (err) {
-      const msg = err.message || ''
-      if (msg.includes('email-already-in-use')) {
-        setError('An account with this email already exists. Try logging in.')
-      } else if (msg.includes('Email already registered')) {
-        // MongoDB duplicate — Firebase account was created, sync to get JWT
-        try {
-          const idToken = await auth.currentUser?.getIdToken()
-          if (idToken) {
-            clearToken()
-            const data = await authAPI.firebaseSync(idToken)
-            setToken(data.token)
-            navigate('/dashboard')
-            return
-          }
-        } catch {
-          // fall through to error display
-        }
-        setError('An account with this email already exists. Try logging in.')
-      } else if (msg.includes('weak-password')) {
-        setError('Password is too weak. Please use at least 6 characters.')
-      } else {
-        setError(msg.replace('Firebase: ', '').replace(/\(auth\/.*\)\.?/, '').trim())
-      }
+      setError(err.message.replace('Firebase: ', '').replace(/\(auth\/.*\)\.?/, '').trim())
     } finally { setLoading(false) }
   }
 
-  // ── Google Sign-Up ───────────────────────────────────────────────────────
   const handleGoogle = async () => {
-    setGoogleLoading(true)
-    setError('')
+    setGoogleLoading(true); setError('')
     try {
       const result  = await signInWithPopup(auth, googleProvider)
       const idToken = await result.user.getIdToken()
-      clearToken()
-      const data = await authAPI.firebaseSync(idToken)
+      const data    = await authAPI.firebaseSync(idToken)
       setToken(data.token)
       navigate('/dashboard')
     } catch (err) {
-      const msg = err.message || ''
-      if (msg.includes('popup-closed-by-user') || msg.includes('cancelled-popup-request')) {
-        // User dismissed — no error to show
-      } else {
-        setError(msg.replace('Firebase: ', '').replace(/\(auth\/.*\)\.?/, '').trim())
-      }
+      setError(err.message.replace('Firebase: ', '').replace(/\(auth\/.*\)\.?/, '').trim())
     } finally { setGoogleLoading(false) }
   }
 
-  const strength      = form.password.length === 0 ? 0 : form.password.length < 6 ? 1 : form.password.length < 10 ? 2 : 3
+  const strength   = form.password.length === 0 ? 0 : form.password.length < 6 ? 1 : form.password.length < 10 ? 2 : 3
   const strengthLabel = ['', 'Weak', 'Medium', 'Strong'][strength]
   const strengthColor = ['', '#ef4444', '#f59e0b', '#10b981'][strength]
 
@@ -132,6 +90,7 @@ const SignupPage = () => {
         <div className="absolute bottom-1/4 left-1/4 w-64 h-64 rounded-full bg-violet-500/6 blur-[80px] animate-pulse" style={{ animationDelay: '1.5s' }} />
         <div className="absolute top-0 right-0 w-px h-full bg-gradient-to-b from-transparent via-cyan-500/20 to-transparent" />
 
+        {/* Floating icons */}
         <div className="absolute top-1/4 left-12 w-12 h-12 rounded-2xl flex items-center justify-center text-2xl opacity-25"
           style={{ animation: 'floatY2 4s ease-in-out infinite', background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.2)' }}>⚡</div>
         <div className="absolute bottom-1/4 right-14 w-10 h-10 rounded-xl flex items-center justify-center text-xl opacity-20"
@@ -164,11 +123,11 @@ const SignupPage = () => {
 
           <div className="space-y-3">
             {[
-              { icon: '🧠', text: 'AI-personalised 20-question quizzes'  },
-              { icon: '⚡', text: 'Per-window difficulty adaptation'      },
-              { icon: '🔄', text: 'Resume quizzes after refresh'         },
-              { icon: '🏆', text: 'Real-time global leaderboards'        },
-              { icon: '🔐', text: 'Google Sign-In supported'             },
+              { icon: '🧠', text: 'AI-personalised 20-question quizzes'   },
+              { icon: '⚡', text: 'Per-window difficulty adaptation'       },
+              { icon: '🔄', text: 'Resume quizzes after refresh'          },
+              { icon: '🏆', text: 'Real-time global leaderboards'         },
+              { icon: '🔐', text: 'Google Sign-In supported'              },
             ].map((f, i) => (
               <div key={i} className="feat-row flex items-center gap-3 group">
                 <div className="feat-icon w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-sm"
@@ -208,15 +167,11 @@ const SignupPage = () => {
 
           {/* Google */}
           <button
-            onClick={handleGoogle}
-            disabled={googleLoading || loading}
+            onClick={handleGoogle} disabled={googleLoading}
             className="w-full flex items-center justify-center gap-3 py-3.5 bg-white font-bold rounded-xl transition-all duration-300 disabled:opacity-60 hover:shadow-xl hover:shadow-white/15 hover:scale-[1.01] active:scale-[0.99] mb-6 text-slate-800 text-sm"
           >
             {googleLoading
-              ? <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
+              ? <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
               : <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                   <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -242,35 +197,27 @@ const SignupPage = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {[
-              { label: 'Full Name', name: 'name',  type: 'text',  placeholder: 'John Doe'        },
+              { label: 'Full Name', name: 'name',  type: 'text',  placeholder: 'John Doe'       },
               { label: 'Email',     name: 'email', type: 'email', placeholder: 'you@example.com' },
             ].map(({ label, name, type, placeholder }) => (
               <div key={name}>
                 <label style={{ display:'block',fontSize:'10px',fontWeight:700,color:'#64748b',textTransform:'uppercase',letterSpacing:'0.15em',marginBottom:'8px' }}>{label}</label>
-                <input
-                  type={type} name={name} value={form[name]}
-                  onChange={handleChange} required placeholder={placeholder}
+                <input type={type} name={name} value={form[name]} onChange={handleChange} required placeholder={placeholder}
                   onFocus={() => setFocused(name)} onBlur={() => setFocused(null)}
-                  style={inputStyle(name)}
-                />
+                  style={inputStyle(name)} />
               </div>
             ))}
 
-            {/* Password with strength indicator */}
+            {/* Password with strength */}
             <div>
               <label style={{ display:'block',fontSize:'10px',fontWeight:700,color:'#64748b',textTransform:'uppercase',letterSpacing:'0.15em',marginBottom:'8px' }}>Password</label>
               <div style={{ position: 'relative' }}>
-                <input
-                  type={showPassword ? 'text' : 'password'} name="password" value={form.password}
+                <input type={showPassword ? 'text' : 'password'} name="password" value={form.password}
                   onChange={handleChange} required placeholder="Min. 6 characters"
                   onFocus={() => setFocused('password')} onBlur={() => setFocused(null)}
-                  style={{ ...inputStyle('password'), paddingRight: '48px' }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  style={{ position:'absolute',right:'14px',top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'#64748b',transition:'color 0.2s' }}
-                >
+                  style={{ ...inputStyle('password'), paddingRight: '48px' }} />
+                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  style={{ position:'absolute',right:'14px',top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'#64748b',transition:'color 0.2s' }}>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -280,7 +227,7 @@ const SignupPage = () => {
               {form.password.length > 0 && (
                 <div className="mt-2">
                   <div className="flex gap-1 mb-1">
-                    {[1, 2, 3].map(level => (
+                    {[1,2,3].map(level => (
                       <div key={level} className="flex-1 h-1 rounded-full transition-all duration-400"
                         style={{ background: strength >= level ? strengthColor : 'rgba(255,255,255,0.08)' }} />
                     ))}
@@ -290,39 +237,28 @@ const SignupPage = () => {
               )}
             </div>
 
-            {/* Confirm password */}
+            {/* Confirm */}
             <div>
               <label style={{ display:'block',fontSize:'10px',fontWeight:700,color:'#64748b',textTransform:'uppercase',letterSpacing:'0.15em',marginBottom:'8px' }}>Confirm Password</label>
-              <input
-                type={showPassword ? 'text' : 'password'} name="confirm" value={form.confirm}
+              <input type={showPassword ? 'text' : 'password'} name="confirm" value={form.confirm}
                 onChange={handleChange} required placeholder="Re-enter password"
                 onFocus={() => setFocused('confirm')} onBlur={() => setFocused(null)}
-                style={inputStyle('confirm')}
-              />
+                style={inputStyle('confirm')} />
               {form.confirm && form.password !== form.confirm && (
                 <p style={{ color: '#f87171', fontSize: '11px', marginTop: '4px' }}>Passwords don't match</p>
               )}
             </div>
 
-            <button
-              type="submit"
-              disabled={loading || googleLoading}
+            <button type="submit" disabled={loading}
               className="relative w-full py-4 rounded-xl font-bold text-white overflow-hidden disabled:opacity-60 transition-all duration-300 hover:scale-[1.01] hover:shadow-xl active:scale-[0.99]"
               style={{ background: 'linear-gradient(135deg,#06b6d4,#3b82f6)', boxShadow: '0 4px 20px rgba(6,182,212,0.2)' }}
               onMouseEnter={e => { if (!loading) e.currentTarget.style.boxShadow = '0 8px 32px rgba(6,182,212,0.4)' }}
               onMouseLeave={e => e.currentTarget.style.boxShadow = '0 4px 20px rgba(6,182,212,0.2)'}
             >
               <span className="relative flex items-center justify-center gap-2 text-sm">
-                {loading
-                  ? <>
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Creating account...
-                    </>
-                  : 'Create Account →'
-                }
+                {loading ? (
+                  <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Creating account...</>
+                ) : 'Create Account →'}
               </span>
             </button>
           </form>
